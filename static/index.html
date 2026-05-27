@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>LZECrypto Mini App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/style.css?v=5">
+</head>
+<body>
+    <div class="app">
+   <!-- Головна -->
+        <section class="tab-page active" id="page-home">
+            <div class="hero-card">
+                <div class="hero-icon">💰</div>
+                <h1>LZECrypto</h1>
+                <p>Криптопомічник у форматі Telegram Mini App</p>
+            </div>
+
+                 <div class="card">
+  	  <h2>📌 Оновлення</h2>
+  	  <p class="muted">
+  	      Тут будуть відображатися оновлення, новини проєкту та інформація про нові можливості LZECrypto.
+ 	   </p>
+	</div>
+
+            <div class="card">
+                <h2>📰 Новини</h2>
+                <button onclick="getNews()">Показати новини</button>
+                <div id="newsResult"></div>
+            </div>
+        </section>
+
+        <!-- Крипта -->
+        <section class="tab-page" id="page-crypto">
+            <div class="page-title">
+                <h1>💎 Крипта</h1>
+                <p>Курс, конвертація та графіки</p>
+            </div>
+
+            <div class="card">
+                <h2>📊 Курс</h2>
+                <input id="coinInput" placeholder="BTC, ETH, SOL">
+                <button onclick="getPrice()">Показати курс</button>
+                <p id="priceResult"></p>
+            </div>
+
+            <div class="card">
+                <h2>💱 Конвертація</h2>
+                <input id="amountInput" placeholder="Сума, наприклад 100">
+                <input id="fromInput" placeholder="З чого, наприклад USD або BTC">
+                <input id="toInput" placeholder="У що, наприклад BTC або UAH">
+                <button onclick="convert()">Конвертувати</button>
+                <p id="convertResult"></p>
+            </div>
+
+            <div class="card">
+                <h2>📈 Графік</h2>
+                <input id="chartInput" placeholder="BTC">
+                <button onclick="getChart()">Показати графік</button>
+
+                <div class="chart-box">
+                    <canvas id="priceChart"></canvas>
+                </div>
+
+                <p id="chartResult"></p>
+            </div>
+
+            <div class="card">
+                <h2>🔝 Топ-10</h2>
+                <button onclick="getTop()">Показати топ</button>
+                <div id="topResult"></div>
+            </div>
+        </section>
+
+        <!-- Сповіщення -->
+        <section class="tab-page" id="page-alerts">
+            <div class="page-title">
+                <h1>🔔 Сповіщення</h1>
+                <p>Контроль ціни вверх, вниз або за інтервалом</p>
+            </div>
+
+            <div class="card">
+                <h2>🎯 Поріг ціни</h2>
+                <input id="alertSymbol" placeholder="Монета, наприклад BTC">
+                <input id="alertPrice" placeholder="Ціна, наприклад 110000">
+
+                <select id="alertDirection">
+                    <option value="above">Вище ціни</option>
+                    <option value="below">Нижче ціни</option>
+                </select>
+
+                <button onclick="addPriceAlert()">Створити порогове сповіщення</button>
+                <p id="priceAlertResult"></p>
+            </div>
+
+            <div class="card">
+                <h2>⏱ Періодичне оновлення</h2>
+                <input id="periodicSymbol" placeholder="Монета, наприклад BTC">
+                <input id="periodicInterval" placeholder="Інтервал у хвилинах, наприклад 10">
+
+                <button onclick="addPeriodicAlert()">Створити періодичне сповіщення</button>
+                <p id="periodicAlertResult"></p>
+            </div>
+       
+<div class="card danger-card">
+    <h2>🛑 Керування сповіщеннями</h2>
+    <p class="muted">
+        Натисни кнопку нижче, щоб зупинити всі активні сповіщення.
+    </p>
+
+    <button class="danger-button" onclick="stopAllAlerts()">
+        Зупинити всі сповіщення
+    </button>
+
+    <p id="stopAlertsResult"></p>
+</div>
+ </section>
+        <!-- Зв'язок -->
+        <section class="tab-page" id="page-contact">
+    <div class="page-title">
+        <h1>💬 Зв'язок</h1>
+        <p>Контакти розробника</p>
+    </div>
+
+            <div class="card">
+        <h2>👨‍💻 Розробник</h2>
+
+        <p class="muted">ПІБ:</p>
+        <p><b>Яроцький Дмитро</b></p>
+
+        <p class="muted">Електронна пошта:</p>
+        <p>
+            <a href="mailto:dioza322@gmail.com">dioza322@gmail.com</a>
+        </p>
+
+        <p class="muted">Telegram:</p>
+        <a class="contact-button" href="https://t.me/lzedmitriy" target="_blank">
+            @lzedmitriy
+        </a>
+    </div>
+</section>
+
+   <!-- Нижня навігація -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="switchTab('home', this)">
+            <span class="nav-icon">🏠</span>
+            <span>Головна</span>
+        </button>
+
+        <button class="nav-item" onclick="switchTab('crypto', this)">
+            <span class="nav-icon">💎</span>
+            <span>Крипта</span>
+        </button>
+
+        <button class="nav-item" onclick="switchTab('alerts', this)">
+            <span class="nav-icon">🔔</span>
+            <span>Сповіщення</span>
+        </button>
+
+        <button class="nav-item" onclick="switchTab('contact', this)">
+            <span class="nav-icon">💬</span>
+            <span>Зв'язок</span>
+        </button>
+    </nav>
+
+    <script src="/static/app.js?v=7"></script>
+</body>
+</html>
