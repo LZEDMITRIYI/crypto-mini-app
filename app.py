@@ -240,61 +240,6 @@ async def api_stop_alerts(payload: dict):
         "removed_periodic_alerts": removed_periodic_count,
     }
 
-@app.get("/api/chart/{<!DOCTYPE html>
-<html lang="uk">
-<head>
-    <meta charset="UTF-8">
-    <title>LZECrypto Mini App</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="/static/style.css?v=5">
-</head>}")
-async def api_chart(symbol: str):
-    url = (
-        "https://min-api.cryptocompare.com/data/v2/histohour"
-        f"?fsym={symbol.upper()}&tsym=USD&limit=23"
-    )
-
-    try:
-        response = requests.get(url, timeout=10)
-    except requests.RequestException:
-        return {
-            "ok": False,
-            "symbol": symbol.upper(),
-            "labels": [],
-            "prices": [],
-        }
-
-    if response.status_code != 200:
-        return {
-            "ok": False,
-            "symbol": symbol.upper(),
-            "labels": [],
-            "prices": [],
-        }
-
-    data = response.json().get("Data", {}).get("Data", [])
-
-    if not data:
-        return {
-            "ok": False,
-            "symbol": symbol.upper(),
-            "labels": [],
-            "prices": [],
-        }
-
-    prices = [point["close"] for point in data]
-    labels = [f"{i}:00" for i in range(len(prices))]
-
-    return {
-        "ok": True,
-        "symbol": symbol.upper(),
-        "labels": labels,
-        "prices": prices,
-    }
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
