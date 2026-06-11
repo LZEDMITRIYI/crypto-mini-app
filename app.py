@@ -22,6 +22,23 @@ app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+COIN_IDS = {
+    "BTC": "bitcoin",
+    "ETH": "ethereum",
+    "USDT": "tether",
+    "XRP": "ripple",
+    "BNB": "binancecoin",
+    "SOL": "solana",
+    "USDC": "usd-coin",
+    "DOGE": "dogecoin",
+    "ADA": "cardano",
+    "TRX": "tron",
+    "DOT": "polkadot",
+    "LTC": "litecoin",
+    "AVAX": "avalanche-2",
+    "MATIC": "matic-network",
+}
+
 TOP_COINS = [
     ("bitcoin", "BTC"),
     ("ethereum", "ETH"),
@@ -35,24 +52,63 @@ TOP_COINS = [
     ("tron", "TRX"),
 ]
 
+FIAT_CURRENCIES = {"USD", "EUR", "UAH", "GBP", "PLN"}
+
 
 def get_price(from_coin, to_coin="USD"):
-    url = (
-        "https://min-api.cryptocompare.com/data/price"
-        f"?fsym={from_coin.upper()}&tsyms={to_coin.upper()}"
-    )
+    from_coin = from_coin.upper().strip()
+    to_coin = to_coin.upper().strip()
+
+    from_id = COIN_IDS.get(from_coin)
+    if not from_id:
+        return None
 
     try:
-        response = requests.get(url, timeout=10)
-        print("CryptoCompare price:", response.status_code, response.text[:300])
+        if to_coin in FIAT_CURRENCIES:
+            url = "https://api.coingecko.com/api/v3/simple/price"
+            params = {
+                "ids": from_id,
+                "vs_currencies": to_coin.lower(),
+            }
+
+            response = requests.get(url, params=params, timeout=10)
+            print("CoinGecko price:", response.status_code, response.text[:300])
+
+            if response.status_code != 200:
+                return None
+
+            data = response.json()
+            return data.get(from_id, {}).get(to_coin.lower())
+
+        to_id = COIN_IDS.get(to_coin)
+        if not to_id:
+            return None
+
+        url = "https://api.coingecko.com/api/v3/simple/price"
+        params = {
+            "ids": f"{from_id},{to_id}",
+            "vs_currencies": "usd",
+        }
+
+        response = requests.get(url, params=params, timeout=10)
+        print("CoinGecko convert:", response.status_code, response.text[:300])
+
+        if response.status_code != 200:
+            return None
+
+        data = response.json()
+
+        from_price_usd = data.get(from_id, {}).get("usd")
+        to_price_usd = data.get(to_id, {}).get("usd")
+
+        if not from_price_usd or not to_price_usd:
+            return None
+
+        return from_price_usd / to_price_usd
+
     except requests.RequestException as e:
-        print("CryptoCompare request error:", e)
+        print("CoinGecko request error:", e)
         return None
-
-    if response.status_code != 200:
-        return None
-
-    return response.json().get(to_coin.upper())
 
 
 def get_top_coins():
@@ -260,17 +316,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 @app.get("/api/chart/{symbol}")
 async def api_chart(symbol: str):
-    url = (
-        "https://min-api.cryptocompare.com/data/v2/histohour"
-        f"?fsym={symbol.upper()}&tsym=USD&limit=23"
-    )
+    symbol = symbol.upper().strip()
+    coin_id = COIN_IDS.get(symbol)
 
-    try:
-        response = requests.get(url, timeout=10)
-    except requests.RequestException:
+    if not coin_id:
         return {
             "ok": False,
-            "symbol": symbol.upper(),
+            "symbol": symbol,
+            "labels": [],
+            "prices": [],
+        }
+
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+    params = {
+        "vs_currency": "usd",
+        "days": 1,
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        print("CoinGecko chart:", response.status_code, response.text[:300])
+    except requests.RequestException as e:
+        print("CoinGecko chart error:", e)
+        return {
+            "ok": False,
+            "symbol": symbol,
             "labels": [],
             "prices": [],
         }
@@ -278,27 +348,29 @@ async def api_chart(symbol: str):
     if response.status_code != 200:
         return {
             "ok": False,
-            "symbol": symbol.upper(),
+            "symbol": symbol,
             "labels": [],
             "prices": [],
         }
 
-    data = response.json().get("Data", {}).get("Data", [])
+    data = response.json().get("prices", [])
 
     if not data:
         return {
             "ok": False,
-            "symbol": symbol.upper(),
+            "symbol": symbol,
             "labels": [],
             "prices": [],
         }
 
-    prices = [point["close"] for point in data]
-    labels = [f"{i}:00" for i in range(len(prices))]
+    points = data[-24:]
+
+    labels = [str(i) for i in range(len(points))]
+    prices = [round(point[1], 4) for point in points]
 
     return {
         "ok": True,
-        "symbol": symbol.upper(),
+        "symbol": symbol,
         "labels": labels,
         "prices": prices,
     }
