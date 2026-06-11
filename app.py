@@ -44,7 +44,9 @@ def get_price(from_coin, to_coin="USD"):
 
     try:
         response = requests.get(url, timeout=10)
-    except requests.RequestException:
+        print("CryptoCompare price:", response.status_code, response.text[:300])
+    except requests.RequestException as e:
+        print("CryptoCompare request error:", e)
         return None
 
     if response.status_code != 200:
