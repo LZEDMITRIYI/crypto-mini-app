@@ -52,8 +52,96 @@ TOP_COINS = [
     ("tron", "TRX"),
 ]
 
-FIAT_CURRENCIES = {"USD", "EUR", "UAH", "GBP", "PLN"}
+BINANCE_BASE_URLS = [
+    "https://api.binance.com",
+    "https://data-api.binance.vision",
+]
 
+BINANCE_SYMBOLS = {
+    "BTC": "BTCUSDT",
+    "ETH": "ETHUSDT",
+    "BNB": "BNBUSDT",
+    "SOL": "SOLUSDT",
+    "XRP": "XRPUSDT",
+    "DOGE": "DOGEUSDT",
+    "ADA": "ADAUSDT",
+    "TRX": "TRXUSDT",
+    "DOT": "DOTUSDT",
+    "LTC": "LTCUSDT",
+    "AVAX": "AVAXUSDT",
+    "MATIC": "MATICUSDT",
+}
+
+FIAT_USD_RATES = {
+    "USD": 1.0,
+    "USDT": 1.0,
+    "USDC": 1.0,
+    "EUR": 1.08,
+    "GBP": 1.27,
+    "UAH": 0.024,
+    "PLN": 0.27,
+}
+
+PRICE_CACHE = {}
+CACHE_TTL = 60
+
+
+def binance_get(path, params):
+    for base_url in BINANCE_BASE_URLS:
+        try:
+            response = requests.get(
+                f"{base_url}{path}",
+                params=params,
+                timeout=10,
+                headers={"user-agent": "LZECryptoBot/1.0"},
+            )
+
+            print("Binance response:", response.status_code, response.text[:300])
+
+            if response.status_code == 200:
+                return response
+
+        except requests.RequestException as e:
+            print("Binance request error:", e)
+
+    return None
+
+
+def get_usd_price(symbol):
+    symbol = symbol.upper().strip()
+
+    if symbol in FIAT_USD_RATES:
+        return FIAT_USD_RATES[symbol]
+
+    now = time.time()
+    cached = PRICE_CACHE.get(symbol)
+
+    if cached and now - cached["time"] < CACHE_TTL:
+        return cached["price"]
+
+    binance_symbol = BINANCE_SYMBOLS.get(symbol)
+
+    if not binance_symbol:
+        return None
+
+    response = binance_get(
+        "/api/v3/ticker/price",
+        {"symbol": binance_symbol},
+    )
+
+    if response is None:
+        return None
+
+    try:
+        price = float(response.json().get("price"))
+        PRICE_CACHE[symbol] = {
+            "price": price,
+            "time": now,
+        }
+        return price
+    except Exception as e:
+        print("Price parse error:", e)
+        return None
 
 def get_price(from_coin, to_coin="USD"):
     from_coin = from_coin.upper().strip()
@@ -62,91 +150,13 @@ def get_price(from_coin, to_coin="USD"):
     if from_coin == to_coin:
         return 1
 
-    from_is_crypto = from_coin in COIN_IDS
-    to_is_crypto = to_coin in COIN_IDS
+    from_price_usd = get_usd_price(from_coin)
+    to_price_usd = get_usd_price(to_coin)
 
-    headers = {
-        "accept": "application/json",
-        "user-agent": "LZECryptoBot/1.0",
-    }
-
-    try:
-        # crypto -> fiat
-        if from_is_crypto and to_coin in FIAT_CURRENCIES:
-            from_id = COIN_IDS[from_coin]
-
-            url = "https://api.coingecko.com/api/v3/simple/price"
-            params = {
-                "ids": from_id,
-                "vs_currencies": to_coin.lower(),
-            }
-
-            response = requests.get(url, params=params, headers=headers, timeout=10)
-            print("CoinGecko price:", response.status_code, response.text[:300])
-
-            if response.status_code != 200:
-                return None
-
-            data = response.json()
-            return data.get(from_id, {}).get(to_coin.lower())
-
-        # fiat -> crypto
-        if from_coin in FIAT_CURRENCIES and to_is_crypto:
-            to_id = COIN_IDS[to_coin]
-
-            url = "https://api.coingecko.com/api/v3/simple/price"
-            params = {
-                "ids": to_id,
-                "vs_currencies": from_coin.lower(),
-            }
-
-            response = requests.get(url, params=params, headers=headers, timeout=10)
-            print("CoinGecko fiat to crypto:", response.status_code, response.text[:300])
-
-            if response.status_code != 200:
-                return None
-
-            data = response.json()
-            crypto_price = data.get(to_id, {}).get(from_coin.lower())
-
-            if not crypto_price:
-                return None
-
-            return 1 / crypto_price
-
-        # crypto -> crypto
-        if from_is_crypto and to_is_crypto:
-            from_id = COIN_IDS[from_coin]
-            to_id = COIN_IDS[to_coin]
-
-            url = "https://api.coingecko.com/api/v3/simple/price"
-            params = {
-                "ids": f"{from_id},{to_id}",
-                "vs_currencies": "usd",
-            }
-
-            response = requests.get(url, params=params, headers=headers, timeout=10)
-            print("CoinGecko crypto convert:", response.status_code, response.text[:300])
-
-            if response.status_code != 200:
-                return None
-
-            data = response.json()
-
-            from_price_usd = data.get(from_id, {}).get("usd")
-            to_price_usd = data.get(to_id, {}).get("usd")
-
-            if not from_price_usd or not to_price_usd:
-                return None
-
-            return from_price_usd / to_price_usd
-
+    if not from_price_usd or not to_price_usd:
         return None
 
-    except requests.RequestException as e:
-        print("CoinGecko request error:", e)
-        return None
-
+    return from_price_usd / to_price_usd
 
 def get_top_coins():
     result = []
@@ -354,9 +364,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @app.get("/api/chart/{symbol}")
 async def api_chart(symbol: str):
     symbol = symbol.upper().strip()
-    coin_id = COIN_IDS.get(symbol)
+    binance_symbol = BINANCE_SYMBOLS.get(symbol)
 
-    if not coin_id:
+    if not binance_symbol:
         return {
             "ok": False,
             "symbol": symbol,
@@ -364,53 +374,52 @@ async def api_chart(symbol: str):
             "prices": [],
         }
 
-    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
-    params = {
-        "vs_currency": "usd",
-        "days": 1,
-    }
+    response = binance_get(
+        "/api/v3/klines",
+        {
+            "symbol": binance_symbol,
+            "interval": "1h",
+            "limit": 24,
+        },
+    )
+
+    if response is None:
+        return {
+            "ok": False,
+            "symbol": symbol,
+            "labels": [],
+            "prices": [],
+        }
 
     try:
-        response = requests.get(url, params=params, timeout=10)
-        print("CoinGecko chart:", response.status_code, response.text[:300])
-    except requests.RequestException as e:
-        print("CoinGecko chart error:", e)
+        data = response.json()
+
+        labels = [
+            time.strftime("%H:%M", time.localtime(item[0] / 1000))
+            for item in data
+        ]
+
+        prices = [
+            round(float(item[4]), 4)
+            for item in data
+        ]
+
+        return {
+            "ok": True,
+            "symbol": symbol,
+            "labels": labels,
+            "prices": prices,
+        }
+
+    except Exception as e:
+        print("Chart parse error:", e)
+
         return {
             "ok": False,
             "symbol": symbol,
             "labels": [],
             "prices": [],
         }
-
-    if response.status_code != 200:
-        return {
-            "ok": False,
-            "symbol": symbol,
-            "labels": [],
-            "prices": [],
-        }
-
-    data = response.json().get("prices", [])
-
-    if not data:
-        return {
-            "ok": False,
-            "symbol": symbol,
-            "labels": [],
-            "prices": [],
-        }
-
-    points = data[-24:]
-
-    labels = [str(i) for i in range(len(points))]
-    prices = [round(point[1], 4) for point in points]
-
-    return {
-        "ok": True,
-        "symbol": symbol,
-        "labels": labels,
-        "prices": prices,
-    }
 
 telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
 telegram_app.add_handler(CommandHandler("start", start))
