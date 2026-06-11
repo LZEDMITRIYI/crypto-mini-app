@@ -59,19 +59,29 @@ def get_price(from_coin, to_coin="USD"):
     from_coin = from_coin.upper().strip()
     to_coin = to_coin.upper().strip()
 
-    from_id = COIN_IDS.get(from_coin)
-    if not from_id:
-        return None
+    if from_coin == to_coin:
+        return 1
+
+    from_is_crypto = from_coin in COIN_IDS
+    to_is_crypto = to_coin in COIN_IDS
+
+    headers = {
+        "accept": "application/json",
+        "user-agent": "LZECryptoBot/1.0",
+    }
 
     try:
-        if to_coin in FIAT_CURRENCIES:
+        # crypto -> fiat
+        if from_is_crypto and to_coin in FIAT_CURRENCIES:
+            from_id = COIN_IDS[from_coin]
+
             url = "https://api.coingecko.com/api/v3/simple/price"
             params = {
                 "ids": from_id,
                 "vs_currencies": to_coin.lower(),
             }
 
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, headers=headers, timeout=10)
             print("CoinGecko price:", response.status_code, response.text[:300])
 
             if response.status_code != 200:
@@ -80,31 +90,58 @@ def get_price(from_coin, to_coin="USD"):
             data = response.json()
             return data.get(from_id, {}).get(to_coin.lower())
 
-        to_id = COIN_IDS.get(to_coin)
-        if not to_id:
-            return None
+        # fiat -> crypto
+        if from_coin in FIAT_CURRENCIES and to_is_crypto:
+            to_id = COIN_IDS[to_coin]
 
-        url = "https://api.coingecko.com/api/v3/simple/price"
-        params = {
-            "ids": f"{from_id},{to_id}",
-            "vs_currencies": "usd",
-        }
+            url = "https://api.coingecko.com/api/v3/simple/price"
+            params = {
+                "ids": to_id,
+                "vs_currencies": from_coin.lower(),
+            }
 
-        response = requests.get(url, params=params, timeout=10)
-        print("CoinGecko convert:", response.status_code, response.text[:300])
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+            print("CoinGecko fiat to crypto:", response.status_code, response.text[:300])
 
-        if response.status_code != 200:
-            return None
+            if response.status_code != 200:
+                return None
 
-        data = response.json()
+            data = response.json()
+            crypto_price = data.get(to_id, {}).get(from_coin.lower())
 
-        from_price_usd = data.get(from_id, {}).get("usd")
-        to_price_usd = data.get(to_id, {}).get("usd")
+            if not crypto_price:
+                return None
 
-        if not from_price_usd or not to_price_usd:
-            return None
+            return 1 / crypto_price
 
-        return from_price_usd / to_price_usd
+        # crypto -> crypto
+        if from_is_crypto and to_is_crypto:
+            from_id = COIN_IDS[from_coin]
+            to_id = COIN_IDS[to_coin]
+
+            url = "https://api.coingecko.com/api/v3/simple/price"
+            params = {
+                "ids": f"{from_id},{to_id}",
+                "vs_currencies": "usd",
+            }
+
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+            print("CoinGecko crypto convert:", response.status_code, response.text[:300])
+
+            if response.status_code != 200:
+                return None
+
+            data = response.json()
+
+            from_price_usd = data.get(from_id, {}).get("usd")
+            to_price_usd = data.get(to_id, {}).get("usd")
+
+            if not from_price_usd or not to_price_usd:
+                return None
+
+            return from_price_usd / to_price_usd
+
+        return None
 
     except requests.RequestException as e:
         print("CoinGecko request error:", e)
